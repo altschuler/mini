@@ -3,11 +3,13 @@ import Text.ParserCombinators.Parsec hiding (spaces)
 import Control.Monad
 import System.Environment
 import Numeric
+import Utils
 
 data LispVal = Atom String
              | List [LispVal]
              | DottedList [LispVal] LispVal
              | Number Integer
+             | Float Float
              | String String
              | Character Char
              | Bool Bool
@@ -15,9 +17,12 @@ data LispVal = Atom String
 instance Show LispVal where
   show (Atom val) = "[atom:" ++ show val ++ "]"
   show (Number val) = "[number:" ++ show val ++ "]"
+  show (Float val) = "[float:" ++ show val ++ "]"
   show (String val) = "[string:" ++ show val ++ "]"
   show (Character val) = "[char:" ++ show val ++ "]"
   show (Bool val) = "[bool:" ++ show val ++ "]"
+  show (List (x:xs)) = "[list:(" ++ show x ++ " " ++ show xs ++ ")]"
+  show (DottedList head tail) = "[dotlist: head(" ++ show head ++ "), tail(" ++ show tail ++ ")]"
 
 symbol :: Parser Char
 symbol = oneOf "!$%&|*+-/:<=>?@^_~"
@@ -91,10 +96,6 @@ parseBin = do
   x <- many1 (oneOf "01")
   return $ Number (bin2dec x)
 
-bin2dec = bin2dec' 0
-bin2dec' acc "" = acc
-bin2dec' acc (x:xs) = bin2dec' (2 * acc + if x == '0' then 0 else 1) xs
-
 parseNumber :: Parser LispVal
 parseNumber = parseSimpleNumber
               <|> parseDec
@@ -102,13 +103,36 @@ parseNumber = parseSimpleNumber
               <|> parseOct
               <|> parseBin
 
+parseList :: Parser LispVal
+parseList = liftM List $ sepBy parseExpr spaces
+
+parseDottedList :: Parser LispVal
+parseDottedList = do
+  head <- endBy parseExpr spaces
+  tail <- char '.' >> spaces >> parseExpr
+  return $ DottedList head tail
+
+parseQuoted :: Parser LispVal
+parseQuoted = do
+  char '\''
+  x <- parseExpr
+  return $ List [Atom "quote", x]
+
+
+
 parseExpr :: Parser LispVal
 parseExpr = parseAtom
             <|> parseString
             <|> parseCharacter
             <|> parseNumber
             <|> parseBool
+            <|> do
+              char '('
+              x <- try parseList <|> parseDottedList
+              char ')'
+              return x
 
+readExpr :: String -> String
 readExpr input = case parse parseExpr "lisp" input of
   Left err -> "No match: " ++ show err
   Right val -> "Found: " ++ show val
