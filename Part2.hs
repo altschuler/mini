@@ -148,18 +148,34 @@ primitives = [("+",         numericBinop (+)),
               ("/",         numericBinop div),
               ("mod",       numericBinop mod),
               ("quotient",  numericBinop quot),
-              ("remainder", numericBinop rem)]
+              ("remainder", numericBinop rem),
+              ("string?", isString),
+              ("number?", isNumber),
+              ("symbol?", isSymbol)]
+
+isString :: [LispVal] -> LispVal
+isString [(String _)] = Bool True
+isString ((String _):xs) = Bool $ True && unpackBool (isString xs)
+isString _ = Bool False
+
+isSymbol :: [LispVal] -> LispVal
+isSymbol [(Atom _)] = Bool True
+isSymbol ((Atom _):xs) = Bool $ True && unpackBool (isSymbol xs)
+isSymbol _ = Bool False
+
+isNumber :: [LispVal] -> LispVal
+isNumber [(Number _)] = Bool True
+isNumber ((Number _):xs) = Bool $ True && unpackBool (isNumber xs)
+isNumber _ = Bool False
 
 numericBinop :: (Integer -> Integer -> Integer) -> [LispVal] -> LispVal
 numericBinop op params = Number $ foldl1 op $ map unpackNum params
 
+unpackBool :: LispVal -> Bool
+unpackBool (Bool val) = val
+
 unpackNum :: LispVal -> Integer
 unpackNum (Number val) = val
-unpackNum (String val) = let parsed = reads val :: [(Integer, String)]
-                       in if null parsed
-                          then 0
-                          else fst $ parsed !! 0
-unpackNum (List [val]) = unpackNum val
 unpackNum _ = 0
 
 readExpr :: String -> LispVal
