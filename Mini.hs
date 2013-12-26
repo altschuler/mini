@@ -166,12 +166,38 @@ eval val@(String _) = return val
 eval val@(Number _) = return val
 eval val@(Bool _) = return val
 eval (List [Atom "quote", val]) = return val
+eval (List [Atom "if", pred, yes, no]) = do
+  result <- eval pred
+  case result of
+    Bool True -> eval yes
+    otherwise -> eval no
 eval (List (Atom func : args)) = mapM eval args >>= apply func
 
 apply :: String -> [LispVal] -> ThrowsError LispVal
 apply func args = maybe (throwError $ NotFunction "Unrecognized primitive function args" func)
                   ($ args)
                   (lookup func primitives)
+
+car :: [LispVal] -> ThrowsError LispVal
+car [List (x:_)] = return x
+car [DottedList (x:_) _] = return x
+car [notList] = throwError $ TypeMismatch "list" notList
+car notList = throwError $ NumArgs 1 notList
+
+cdr :: [LispVal] -> ThrowsError LispVal
+cdr [List (_:xs)] = return $ List xs
+cdr [DottedList [_] x] = return x
+cdr [DottedList (_:xs) x] = return $ DottedList xs x
+cdr [notList] = throwError $ TypeMismatch "list" notList
+cdr notList = throwError $ NumArgs 1 notList
+
+
+cons :: [LispVal] -> ThrowsError LispVal
+cons [x, List []] = return $ List [x]
+cons [x, List xs] = return $ List (x:xs)
+cons [x, DottedList xs last] = return $ DottedList (x:xs) last
+cons [x, y] = return $ DottedList [x] y
+cons badArg = throwError $ NumArgs 2 badArg
 
 primitives :: [(String, [LispVal] -> ThrowsError LispVal)]
 primitives = [
@@ -183,6 +209,10 @@ primitives = [
   ("mod",       numericBinop mod),
   ("quotient",  numericBinop quot),
   ("remainder", numericBinop rem),
+  -- list handling
+  ("car", car),
+  ("cdr", cdr),
+  ("cons", cons),
   -- type checks
   ("string?",   isString),
   ("number?",   isNumber),
