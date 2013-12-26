@@ -244,20 +244,20 @@ numBoolBinop = boolBinop unpackNum
 strBoolBinop = boolBinop unpackString
 boolBoolBinop = boolBinop unpackBool
 
-isString :: [LispVal] -> ThrowsError LispVal
-isString [(String _)] = return $ Bool True
-isString ((String _):xs) = isString xs >>= unpackBool >>= return . Bool
-isString _ = return $ Bool False
+checkType :: (LispVal -> Bool) -> [LispVal] -> ThrowsError LispVal
+checkType f xs = return $ Bool $ all f xs
 
-isSymbol :: [LispVal] -> ThrowsError LispVal
-isSymbol [(Atom _)] = return $ Bool True
-isSymbol ((Atom _):xs) = isSymbol xs >>= unpackBool >>= return . Bool
-isSymbol _ = return $ Bool False
+isString = checkType f
+  where f (String _) = True
+        f _ = False
 
-isNumber :: [LispVal] -> ThrowsError LispVal
-isNumber [(Number _)] = return $ Bool True
-isNumber ((Number _):xs) = isNumber xs >>= unpackBool >>= return . Bool
-isNumber _ = return $ Bool False
+isNumber = checkType f
+  where f (Number _) = True
+        f _ = False
+
+isSymbol = checkType f
+  where f (Atom _) = True
+        f _ = False
 
 numericBinop :: (Integer -> Integer -> Integer) -> [LispVal] -> ThrowsError LispVal
 numericBinop op [] = throwError $ NumArgs 2 []
