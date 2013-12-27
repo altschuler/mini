@@ -1,7 +1,9 @@
+{-# LANGUAGE ExistentialQuantification #-}
+
 module Main where
 import Text.ParserCombinators.Parsec hiding (spaces)
 import Control.Monad
-import Control.Monad.Error
+import "mtl" Control.Monad.Error
 import System.Environment
 import Numeric
 import Utils
@@ -166,17 +168,37 @@ eval val@(String _) = return val
 eval val@(Number _) = return val
 eval val@(Bool _) = return val
 eval (List [Atom "quote", val]) = return val
-eval (List [Atom "if", pred, yes, no]) = do
-  result <- eval pred
-  case result of
-    Bool True -> eval yes
-    otherwise -> eval no
+eval (List (Atom "if" : xs)) = evalIf xs
+eval (List (Atom "cond" : xs)) = evalCond xs
 eval (List (Atom func : args)) = mapM eval args >>= apply func
 
 apply :: String -> [LispVal] -> ThrowsError LispVal
-apply func args = maybe (throwError $ NotFunction "Unrecognized primitive function args" func)
+apply func args = maybe (throwError $ NotFunction "Unrecognized primitive function" func)
                   ($ args)
                   (lookup func primitives)
+
+
+evalCondSingle :: LispVal -> LispVal -> ThrowsError LispVal -> ThrowsError LispVal
+evalCondSingle pred conseq alt = do
+  result <- eval pred
+  case result of
+    Bool True  -> eval conseq
+    Bool False -> alt
+    otherwise -> throwError $ TypeMismatch "boolean" result
+
+evalCond :: [LispVal] -> ThrowsError LispVal
+evalCond [List [pred, conseq]] = evalCondSingle pred conseq (return $ List [])
+evalCond (List [pred, conseq] : xs) = evalCondSingle pred conseq (evalCond xs)
+evalCond badArgList = throwError $ BadSpecialForm "invalid cond expression" (badArgList !! 0)
+
+evalIf :: [LispVal] -> ThrowsError LispVal
+evalIf [pred, yes, no] = do
+  result <- eval pred
+  case result of
+    Bool True  -> eval yes
+    Bool False -> eval no
+    otherwise  -> throwError $ TypeMismatch "boolean" result
+evalIf badArgList = throwError $ NumArgs 3 badArgList
 
 car :: [LispVal] -> ThrowsError LispVal
 car [List (x:_)] = return x
