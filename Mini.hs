@@ -23,6 +23,8 @@ data LispVal = Atom String
              | Character Char
              | Bool Bool
 
+data Unpacker = forall a. Eq a => AnyUnpacker (LispVal -> ThrowsError a)
+
 instance Show LispVal where
   show (Atom val) = show val
   show (Number val) = show val
@@ -217,6 +219,8 @@ primitives = [
   ("string?",   isString),
   ("number?",   isNumber),
   ("symbol?",   isSymbol),
+  ("eqv?",      eqv),
+  ("equal?",    equal),
   -- bool ops
   ("=",         numBoolBinop (==)),
   ("<",         numBoolBinop (<)),
@@ -231,6 +235,29 @@ primitives = [
   ("string>?",  strBoolBinop (>)),
   ("string<=?", strBoolBinop (>)),
   ("string>=?", strBoolBinop (<=))]
+
+eqv :: [LispVal] -> ThrowsError LispVal
+eqv [(Bool arg1),       (Bool arg2)]       = return $ Bool $ arg1 == arg2
+eqv [(Number arg1),     (Number arg2)]     = return $ Bool $ arg1 == arg2
+eqv [(String arg1),     (String arg2)]     = return $ Bool $ arg1 == arg2
+eqv [(Atom arg1),       (Atom arg2)]       = return $ Bool $ arg1 == arg2
+eqv [(DottedList xs x), (DottedList ys y)] = eqv [List $ xs ++ [x], List $ ys ++ [y]]
+eqv [(List xs),         (List ys)]         = return $ Bool $ (length xs == length ys)
+                                             && (all eqvPair (zip xs ys))
+  where eqvPair (l, r) = case eqv [l, r] of
+          Left err -> False
+          Right (Bool val) -> val
+eqv [_, _] = return $ Bool False
+eqv badArgList = throwError $ NumArgs 2 badArgList
+
+-- weakly typed equivalence
+equal :: [LispVal] -> ThrowsError LispVal
+equal [arg1, arg2] = do
+  result <- liftM or $ mapM (unpackEquals arg1 arg2)
+            [AnyUnpacker unpackNum, AnyUnpacker unpackString, AnyUnpacker unpackBool]
+  eqvResult <- eqv [arg1, arg2]
+  return $ Bool $ (result || let Bool x = eqvResult in x)
+equal badArgList = throwError $ NumArgs 2 badArgList
 
 boolBinop :: (LispVal -> ThrowsError a) -> (a -> a -> Bool) -> [LispVal] -> ThrowsError LispVal
 boolBinop unpacker op args = if length args /= 2
@@ -263,6 +290,12 @@ numericBinop :: (Integer -> Integer -> Integer) -> [LispVal] -> ThrowsError Lisp
 numericBinop op [] = throwError $ NumArgs 2 []
 numericBinop op singleVal@[_] = throwError $ NumArgs 2 singleVal
 numericBinop op params = mapM unpackNum params >>= return . Number . foldl1 op
+
+unpackEquals :: LispVal -> LispVal -> Unpacker -> ThrowsError Bool
+unpackEquals arg1 arg2 (AnyUnpacker unpacker) = do unpacked1 <- unpacker arg1
+                                                   unpacked2 <- unpacker arg2
+                                                   return $ unpacked1 == unpacked2
+                                                `catchError` (const $ return False)
 
 unpackBool :: LispVal -> ThrowsError Bool
 unpackBool (Bool val) = return val
