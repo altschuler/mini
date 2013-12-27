@@ -51,8 +51,6 @@ instance Error LispError where
 
 type ThrowsError = Either LispError
 
-trapError action = catchError action (return . show)
-
 extractValue :: ThrowsError a -> a
 extractValue (Right val) = val
 
@@ -193,7 +191,6 @@ cdr [DottedList (_:xs) x] = return $ DottedList xs x
 cdr [notList] = throwError $ TypeMismatch "list" notList
 cdr notList = throwError $ NumArgs 1 notList
 
-
 cons :: [LispVal] -> ThrowsError LispVal
 cons [x, List []] = return $ List [x]
 cons [x, List xs] = return $ List (x:xs)
@@ -212,9 +209,9 @@ primitives = [
   ("quotient",  numericBinop quot),
   ("remainder", numericBinop rem),
   -- list handling
-  ("car", car),
-  ("cdr", cdr),
-  ("cons", cons),
+  ("car",       car),
+  ("cdr",       cdr),
+  ("cons",      cons),
   -- type checks
   ("string?",   isString),
   ("number?",   isNumber),
@@ -313,6 +310,8 @@ readExpr :: String -> ThrowsError LispVal
 readExpr input = case parse parseExpr "lisp" input of
   Left err -> throwError $ Parser err
   Right val -> return val
+
+trapError action = catchError action (return . show)
 
 main :: IO ()
 main = do
