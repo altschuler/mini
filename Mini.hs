@@ -1,3 +1,4 @@
+{-# LANGUAGE PackageImports #-}
 {-# LANGUAGE ExistentialQuantification #-}
 
 module Main where
@@ -187,6 +188,7 @@ evalCondSingle pred conseq alt = do
     otherwise -> throwError $ TypeMismatch "boolean" result
 
 evalCond :: [LispVal] -> ThrowsError LispVal
+evalCond [List [Atom "else", conseq]] = eval conseq
 evalCond [List [pred, conseq]] = evalCondSingle pred conseq (return $ List [])
 evalCond (List [pred, conseq] : xs) = evalCondSingle pred conseq (evalCond xs)
 evalCond badArgList = throwError $ BadSpecialForm "invalid cond expression" (badArgList !! 0)
