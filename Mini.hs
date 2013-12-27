@@ -24,14 +24,14 @@ data LispVal = Atom String
              | Bool Bool
 
 instance Show LispVal where
-  show (Atom val) = "[atom:" ++ show val ++ "]"
-  show (Number val) = "[number:" ++ show val ++ "]"
-  show (Float val) = "[float:" ++ show val ++ "]"
-  show (String val) = "[string:" ++ show val ++ "]"
-  show (Character val) = "[char:" ++ show val ++ "]"
-  show (Bool val) = "[bool:" ++ show val ++ "]"
-  show (List (x:xs)) = "[list:(" ++ show x ++ " " ++ show xs ++ ")]"
-  show (DottedList head tail) = "[dotlist: head(" ++ show head ++ "), tail(" ++ show tail ++ ")]"
+  show (Atom val) = show val
+  show (Number val) = show val
+  show (Float val) = show val
+  show (String val) = "\"" ++ show val ++ "\""
+  show (Character val) = "#\\" ++ show val
+  show (Bool val) = if val then "#t" else "#f"
+  show (List xs) = "(" ++ (unwords . map show) xs ++ ")"
+  show (DottedList head tail) = "(" ++ show head ++ " . " ++ show tail ++ ")"
 
 instance Show LispError where
   show (NumArgs expected found) = "Expected " ++ show expected
