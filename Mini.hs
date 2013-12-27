@@ -4,6 +4,7 @@
 module Main where
 import Text.ParserCombinators.Parsec hiding (spaces)
 import Control.Monad
+import Data.List
 import "mtl" Control.Monad.Error
 import System.Environment
 import Numeric
@@ -171,6 +172,7 @@ eval val@(Bool _) = return val
 eval (List [Atom "quote", val]) = return val
 eval (List (Atom "if" : xs)) = evalIf xs
 eval (List (Atom "cond" : xs)) = evalCond xs
+eval (List (Atom "case" : (key : xs))) = evalCase key xs
 eval (List (Atom func : args)) = mapM eval args >>= apply func
 
 apply :: String -> [LispVal] -> ThrowsError LispVal
@@ -178,9 +180,22 @@ apply func args = maybe (throwError $ NotFunction "Unrecognized primitive functi
                   ($ args)
                   (lookup func primitives)
 
+evalCaseClause :: LispVal -> LispVal -> LispVal -> ThrowsError LispVal -> ThrowsError LispVal
+evalCaseClause key val conseq alt = do
+  result <- eqv [key, val]
+  case result of
+    Bool True  -> eval conseq
+    Bool False -> alt
+    otherwise -> throwError $ TypeMismatch "boolean" result
 
-evalCondSingle :: LispVal -> LispVal -> ThrowsError LispVal -> ThrowsError LispVal
-evalCondSingle pred conseq alt = do
+evalCase :: LispVal -> [LispVal] -> ThrowsError LispVal
+evalCase _ [List [Atom "else", conseq]] = eval conseq
+evalCase key [List [val, conseq]] = evalCaseClause key val conseq (return $ List [])
+evalCase key (List [val, conseq] : xs) = evalCaseClause key val conseq (evalCase key xs)
+evalCase _ badArgList = throwError $ BadSpecialForm "invalid cond clause" (badArgList !! 0)
+
+evalCondClause :: LispVal -> LispVal -> ThrowsError LispVal -> ThrowsError LispVal
+evalCondClause pred conseq alt = do
   result <- eval pred
   case result of
     Bool True  -> eval conseq
@@ -189,9 +204,9 @@ evalCondSingle pred conseq alt = do
 
 evalCond :: [LispVal] -> ThrowsError LispVal
 evalCond [List [Atom "else", conseq]] = eval conseq
-evalCond [List [pred, conseq]] = evalCondSingle pred conseq (return $ List [])
-evalCond (List [pred, conseq] : xs) = evalCondSingle pred conseq (evalCond xs)
-evalCond badArgList = throwError $ BadSpecialForm "invalid cond expression" (badArgList !! 0)
+evalCond [List [pred, conseq]] = evalCondClause pred conseq (return $ List [])
+evalCond (List [pred, conseq] : xs) = evalCondClause pred conseq (evalCond xs)
+evalCond badArgList = throwError $ BadSpecialForm "invalid cond clause" (badArgList !! 0)
 
 evalIf :: [LispVal] -> ThrowsError LispVal
 evalIf [pred, yes, no] = do
